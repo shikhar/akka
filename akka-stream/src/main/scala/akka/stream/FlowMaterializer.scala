@@ -12,7 +12,7 @@ import scala.concurrent.duration._
 
 object FlowMaterializer {
   /**
-   * Creates a FlowMaterializer which will execute every step of a transformation
+   * Scala API: Creates a FlowMaterializer which will execute every step of a transformation
    * pipeline within its own [[akka.actor.Actor]]. The required [[akka.actor.ActorRefFactory]]
    * (which can be either an [[akka.actor.ActorSystem]] or an [[akka.actor.ActorContext]])
    * will be used to create these actors, therefore it is *forbidden* to pass this object
@@ -20,6 +20,16 @@ object FlowMaterializer {
    */
   def apply(settings: MaterializerSettings)(implicit context: ActorRefFactory): FlowMaterializer =
     new ActorBasedFlowMaterializer(settings, context)
+
+  /**
+   * Java API: Creates a FlowMaterializer which will execute every step of a transformation
+   * pipeline within its own [[akka.actor.Actor]]. The required [[akka.actor.ActorRefFactory]]
+   * (which can be either an [[akka.actor.ActorSystem]] or an [[akka.actor.ActorContext]])
+   * will be used to create these actors, therefore it is *forbidden* to pass this object
+   * to another actor if the factory is an ActorContext.
+   */
+  def create(settings: MaterializerSettings, context: ActorRefFactory): FlowMaterializer =
+    apply(settings)(context)
 }
 
 /**
@@ -29,7 +39,7 @@ object FlowMaterializer {
  * steps are split up into asynchronous regions is implementation
  * dependent.
  */
-trait FlowMaterializer {
+abstract class FlowMaterializer {
   /**
    * INTERNAL API
    * ops are stored in reverse order
@@ -40,6 +50,14 @@ trait FlowMaterializer {
    */
   private[akka] def consume[I](producerNode: Ast.ProducerNode[I], ops: List[Ast.AstNode]): Unit
 
+}
+
+object MaterializerSettings {
+  private val defaultSettings = new MaterializerSettings
+  /**
+   * Java API: Default settings
+   */
+  def create(): MaterializerSettings = defaultSettings
 }
 
 /**

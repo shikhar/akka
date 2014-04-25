@@ -14,6 +14,7 @@ import akka.io.Tcp
 import akka.stream.impl.{ ActorPublisher, ExposedPublisher, ActorProcessor }
 import akka.stream.MaterializerSettings
 import akka.io.IO
+import akka.japi.Util
 
 object StreamTcp extends ExtensionId[StreamTcpExt] with ExtensionIdProvider {
 
@@ -40,16 +41,64 @@ object StreamTcp extends ExtensionId[StreamTcpExt] with ExtensionIdProvider {
     }
   }
 
-  case class Connect(remoteAddress: InetSocketAddress,
+  object Connect {
+    /**
+     * Java API: factory method to create an Connect instance with default parameters
+     */
+    def create(settings: MaterializerSettings, remoteAddress: InetSocketAddress): Connect =
+      apply(settings, remoteAddress)
+  }
+
+  case class Connect(settings: MaterializerSettings,
+                     remoteAddress: InetSocketAddress,
                      localAddress: Option[InetSocketAddress] = None,
                      options: immutable.Traversable[SocketOption] = Nil,
-                     timeout: Option[FiniteDuration] = None,
-                     settings: MaterializerSettings)
+                     timeout: Option[FiniteDuration] = None) {
 
-  case class Bind(localAddress: InetSocketAddress,
+    /**
+     * Java API
+     */
+    def withLocalAddress(localAddress: InetSocketAddress): Connect =
+      copy(localAddress = Option(localAddress))
+
+    /**
+     * Java API
+     */
+    def withSocketOptions(options: java.lang.Iterable[SocketOption]): Connect =
+      copy(options = Util.immutableSeq(options))
+
+    /**
+     * Java API
+     */
+    def withTimeout(timeout: FiniteDuration): Connect =
+      copy(timeout = Option(timeout))
+  }
+
+  object Bind {
+    /**
+     * Java API: factory method to create a Bind instance with default parameters
+     */
+    def create(settings: MaterializerSettings, localAddress: InetSocketAddress): Bind =
+      apply(settings, localAddress)
+  }
+
+  case class Bind(settings: MaterializerSettings,
+                  localAddress: InetSocketAddress,
                   backlog: Int = 100,
-                  options: immutable.Traversable[SocketOption] = Nil,
-                  settings: MaterializerSettings)
+                  options: immutable.Traversable[SocketOption] = Nil) {
+
+    /**
+     * Java API
+     */
+    def withBacklog(backlog: Int): Bind = copy(backlog = backlog)
+
+    /**
+     * Java API
+     */
+    def withSocketOptions(options: java.lang.Iterable[SocketOption]): Bind =
+      copy(options = Util.immutableSeq(options))
+
+  }
 
 }
 
@@ -74,14 +123,14 @@ private[akka] class StreamTcpManager extends Actor {
   import StreamTcpManager._
 
   def receive: Receive = {
-    case StreamTcp.Connect(remoteAddress, localAddress, options, timeout, settings) ⇒
+    case StreamTcp.Connect(settings, remoteAddress, localAddress, options, timeout) ⇒
       val processorActor = context.actorOf(TcpStreamActor.outboundProps(
         Tcp.Connect(remoteAddress, localAddress, options, timeout, pullMode = true),
         requester = sender(),
         settings))
       processorActor ! ExposedProcessor(new ActorProcessor[ByteString, ByteString](processorActor))
 
-    case StreamTcp.Bind(localAddress, backlog, options, settings) ⇒
+    case StreamTcp.Bind(settings, localAddress, backlog, options) ⇒
       val publisherActor = context.actorOf(TcpListenStreamActor.props(
         Tcp.Bind(context.system.deadLetters, localAddress, backlog, options, pullMode = true),
         requester = sender(),

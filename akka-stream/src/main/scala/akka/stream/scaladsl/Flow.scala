@@ -15,6 +15,9 @@ import akka.stream.FlowMaterializer
 import akka.stream.impl.Ast.{ ExistingProducer, IterableProducerNode, IteratorProducerNode, ThunkProducerNode }
 import akka.stream.impl.FlowImpl
 
+/**
+ * Scala API
+ */
 object Flow {
   /**
    * Construct a transformation of the given producer. The transformation steps
@@ -52,7 +55,7 @@ object Flow {
 }
 
 /**
- * The Flow DSL allows the formulation of stream transformations based on some
+ * Scala API: The Flow DSL allows the formulation of stream transformations based on some
  * input. The starting point can be a collection, an iterator, a block of code
  * which is evaluated repeatedly or a [[org.reactivestreams.api.Producer]].
  *
@@ -60,8 +63,8 @@ object Flow {
  *
  * Each DSL element produces a new Flow that can be further transformed, building
  * up a description of the complete transformation pipeline. In order to execute
- * this pipeline the Flow must be materialized by calling the [[#toFuture]], [[#consume]]
- * or [[#toProducer]] methods on it.
+ * this pipeline the Flow must be materialized by calling the [[#toFuture]], [[#consume]],
+ * [[#onComplete]], or [[#toProducer]] methods on it.
  *
  * It should be noted that the streams modeled by this library are “hot”,
  * meaning that they asynchronously flow through a series of processors without

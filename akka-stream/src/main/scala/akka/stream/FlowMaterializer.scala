@@ -55,7 +55,9 @@ abstract class FlowMaterializer {
 object MaterializerSettings {
   private val defaultSettings = new MaterializerSettings
   /**
-   * Java API: Default settings
+   * Java API: Default settings.
+   * Refine the settings using [[MaterializerSettings#withBuffer]],
+   * [[MaterializerSettings#withFanOut]], [[MaterializerSettings#withSubscriptionTimeout]]
    */
   def create(): MaterializerSettings = defaultSettings
 }
@@ -86,5 +88,20 @@ case class MaterializerSettings(
   require(isPowerOfTwo(maximumInputBufferSize), "initialInputBufferSize must be a power of two")
   require(initialInputBufferSize <= maximumInputBufferSize,
     s"initialInputBufferSize($initialInputBufferSize) must be <= maximumInputBufferSize($maximumInputBufferSize)")
+
+  def withBuffer(initialInputBufferSize: Int, maximumInputBufferSize: Int): MaterializerSettings =
+    copy(initialInputBufferSize = initialInputBufferSize, maximumInputBufferSize = maximumInputBufferSize)
+
+  def withFanOut(initialFanOutBufferSize: Int, maxFanOutBufferSize: Int): MaterializerSettings =
+    copy(initialFanOutBufferSize = initialFanOutBufferSize, maxFanOutBufferSize = maxFanOutBufferSize)
+
+  def withSubscriptionTimeout(timeout: FiniteDuration): MaterializerSettings =
+    copy(upstreamSubscriptionTimeout = timeout, downstreamSubscriptionTimeout = timeout)
+
+  def withSubscriptionTimeout(upstreamSubscriptionTimeout: FiniteDuration,
+                              downstreamSubscriptionTimeout: FiniteDuration): MaterializerSettings =
+    copy(upstreamSubscriptionTimeout = upstreamSubscriptionTimeout,
+      downstreamSubscriptionTimeout = downstreamSubscriptionTimeout)
+
 }
 

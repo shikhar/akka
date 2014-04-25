@@ -13,13 +13,14 @@ import org.reactivestreams.api.Producer
 import akka.japi.Function
 import akka.japi.Function2
 import akka.japi.Procedure
-import akka.japi.Util
+import akka.japi.Util.immutableSeq
 import akka.stream.FlowMaterializer
 import akka.stream.scaladsl.{ Flow ⇒ SFlow }
 
+/**
+ * Java API
+ */
 object Flow {
-
-  // FIXME update documentation (to Java) in this file when the api is settled
 
   /**
    * Construct a transformation of the given producer. The transformation steps
@@ -53,8 +54,8 @@ object Flow {
   }
 
   /**
-   * Define the sequence of elements to be produced by the given closure.
-   * The stream ends normally when evaluation of the closure results in
+   * Define the sequence of elements to be produced by the given Callable.
+   * The stream ends normally when evaluation of the Callable results in
    * a [[akka.stream.Stop]] exception being thrown; it ends exceptionally
    * when any other exception is thrown.
    */
@@ -63,7 +64,7 @@ object Flow {
 }
 
 /**
- * The Flow DSL allows the formulation of stream transformations based on some
+ * Java API: The Flow DSL allows the formulation of stream transformations based on some
  * input. The starting point can be a collection, an iterator, a block of code
  * which is evaluated repeatedly or a [[org.reactivestreams.api.Producer]].
  *
@@ -71,8 +72,8 @@ object Flow {
  *
  * Each DSL element produces a new Flow that can be further transformed, building
  * up a description of the complete transformation pipeline. In order to execute
- * this pipeline the Flow must be materialized by calling the [[#toFuture]], [[#consume]]
- * or [[#toProducer]] methods on it.
+ * this pipeline the Flow must be materialized by calling the [[#toFuture]], [[#consume]],
+ * [[#onComplete]], or [[#toProducer]] methods on it.
  *
  * It should be noted that the streams modeled by this library are “hot”,
  * meaning that they asynchronously flow through a series of processors without
@@ -80,7 +81,7 @@ object Flow {
  * elements a given transformation step might buffer before handing elements
  * downstream, which means that transformation functions may be invoked more
  * often than for corresponding transformations on strict collections like
- * [[List]]. *An important consequence* is that elements that were produced
+ * `List`. *An important consequence* is that elements that were produced
  * into a stream may be discarded by later processors, e.g. when using the
  * [[#take]] combinator.
  *
@@ -146,30 +147,32 @@ abstract class Flow[T] {
   def mapConcat[U](f: Function[T, java.util.List[U]]): Flow[U]
 
   /**
-   * Generic transformation of a stream: for each element the given function is
-   * invoked, passing also the current state (or the given “zero” in the beginning)
-   * and expecting a (possibly empty) sequence of output elements to be produced.
+   * Generic transformation of a stream: for each element the [[Transformer#onNext]]
+   * function is invoked and expecting a (possibly empty) sequence of output elements
+   * to be produced.
    * After handing off the elements produced from one input element to the downstream
-   * consumers, the <code>isComplete</code> predicate determines whether to end
+   * consumers, the [[Transformer#isComplete]] predicate determines whether to end
    * stream processing at this point; in that case the upstream subscription is
    * canceled. Before signaling normal completion to the downstream consumers,
-   * the <code>onComplete</code> function is invoked to produce a (possibly empty)
+   * the [[Transformer#onComplete]] function is invoked to produce a (possibly empty)
    * sequence of elements in response to the end-of-stream event.
    *
-   * After normal completion or error the cleanup function is called with
-   * the current state as parameter.
+   * After normal completion or error the [[Transformer#cleanup]] function is called.
+   *
+   * It is possible to keep state in the concrete [[Transformer]] instance with
+   * ordinary instance variables. The [[Transformer]] is executed by an actor and
+   * therefore you don not have to add any additional thread safety or memory
+   * visibility constructs to access the state from the callback methods.
    */
   def transform[U](transformer: Transformer[T, U]): Flow[U]
 
   /**
    * This transformation stage works exactly like [[#transform]] with the
-   * change that normal input elements are wrapped in [[scala.util.Success]]
-   * and failure signaled from upstream (i.e. <code>onError()</code> calls)
-   * is also handled as normal input element wrapped in [[scala.util.Failure]].
-   * In the latter case the stream ends after processing the failure.
+   * change that failure signaled from upstream will invoke
+   * [[RecoveryTransformer#onError]], which can emit an additional sequence of
+   * elements before the stream ends.
    *
-   * After normal completion or error the cleanup function is called with
-   * the current state as parameter.
+   * After normal completion or error the [[RecoveryTransformer#cleanup]] function is called.
    */
   def transformRecover[U](transformer: RecoveryTransformer[T, U]): Flow[U]
 
@@ -246,8 +249,8 @@ abstract class Flow[T] {
 
   /**
    * When this flow is completed, either through an error or normal
-   * completion, apply the provided function with [[scala.util.Success]]
-   * or [[scala.util.Failure]].
+   * completion, call the [[OnCompleteCallback#onSuccess]] or
+   * [[OnCompleteCallback#onError]] methods.
    *
    * *This operation materializes the flow and initiates its execution.*
    */
@@ -269,6 +272,7 @@ abstract class Flow[T] {
 
 /**
  * General interface for stream transformation.
+ * @see [[Flow#transform]]
  */
 trait Transformer[T, U] {
   def onNext(element: T): java.lang.Iterable[U]
@@ -279,6 +283,7 @@ trait Transformer[T, U] {
 
 /**
  * General interface for stream transformation.
+ * @see [[Flow#transformRecover]]
  */
 trait RecoveryTransformer[T, U] {
   def onNext(element: T): java.lang.Iterable[U]
@@ -289,7 +294,7 @@ trait RecoveryTransformer[T, U] {
 }
 
 /**
- * Callback for [[Flow#onComplete]]
+ * @see [[Flow#onComplete]]
  */
 trait OnCompleteCallback {
   def onSuccess(): Unit
@@ -303,11 +308,10 @@ case class Pair[A, B](a: A, b: B) // FIXME move this to akka.japi.Pair in akka-a
 
 /**
  * Java API: Defines a criteria and determines whether the parameter meets this criteria.
- *
  */
 trait Predicate[T] {
   // FIXME move this to akka.japi.Predicate in akka-actor 
-  def defined(param: T): Boolean
+  def test(param: T): Boolean
 }
 
 /**
@@ -316,7 +320,7 @@ trait Predicate[T] {
 private[akka] class FlowAdapter[T](delegate: SFlow[T]) extends Flow[T] {
   override def map[U](f: Function[T, U]): Flow[U] = new FlowAdapter(delegate.map(f.apply))
 
-  override def filter(p: Predicate[T]): Flow[T] = new FlowAdapter(delegate.filter(p.defined))
+  override def filter(p: Predicate[T]): Flow[T] = new FlowAdapter(delegate.filter(p.test))
 
   override def foreach(c: Procedure[T]): Flow[Unit] = new FlowAdapter(delegate.foreach(c.apply))
 
@@ -331,22 +335,22 @@ private[akka] class FlowAdapter[T](delegate: SFlow[T]) extends Flow[T] {
     new FlowAdapter(delegate.grouped(n).map(_.asJava)) // FIXME optimize to one step
 
   override def mapConcat[U](f: Function[T, java.util.List[U]]): Flow[U] =
-    new FlowAdapter(delegate.mapConcat(elem ⇒ Util.immutableSeq(f.apply(elem))))
+    new FlowAdapter(delegate.mapConcat(elem ⇒ immutableSeq(f.apply(elem))))
 
   override def transform[U](transformer: Transformer[T, U]): Flow[U] =
     new FlowAdapter(delegate.transform(())(
-      f = (_, elem) ⇒ ((), Util.immutableSeq(transformer.onNext(elem))),
-      onComplete = _ ⇒ Util.immutableSeq(transformer.onComplete()),
+      f = (_, elem) ⇒ ((), immutableSeq(transformer.onNext(elem))),
+      onComplete = _ ⇒ immutableSeq(transformer.onComplete()),
       isComplete = _ ⇒ transformer.isComplete,
       cleanup = _ ⇒ transformer.cleanup()))
 
   override def transformRecover[U](transformer: RecoveryTransformer[T, U]): Flow[U] =
     new FlowAdapter(delegate.transformRecover(())(
       f = {
-        case (_, Success(elem)) ⇒ ((), Util.immutableSeq(transformer.onNext(elem)))
-        case (_, Failure(e))    ⇒ ((), Util.immutableSeq(transformer.onError(e)))
+        case (_, Success(elem)) ⇒ ((), immutableSeq(transformer.onNext(elem)))
+        case (_, Failure(e))    ⇒ ((), immutableSeq(transformer.onError(e)))
       },
-      onComplete = _ ⇒ Util.immutableSeq(transformer.onComplete()),
+      onComplete = _ ⇒ immutableSeq(transformer.onComplete()),
       isComplete = _ ⇒ transformer.isComplete,
       cleanup = _ ⇒ transformer.cleanup()))
 
@@ -354,7 +358,7 @@ private[akka] class FlowAdapter[T](delegate: SFlow[T]) extends Flow[T] {
     new FlowAdapter(delegate.groupBy(f.apply).map { case (k, p) ⇒ Pair(k, p) }) // FIXME optimize to one step
 
   override def splitWhen(p: Predicate[T]): Flow[Producer[T]] =
-    new FlowAdapter(delegate.splitWhen(p.defined))
+    new FlowAdapter(delegate.splitWhen(p.test))
 
   override def merge[U >: T](other: Producer[U]): Flow[U] =
     new FlowAdapter(delegate.merge(other))

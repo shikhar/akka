@@ -5,12 +5,13 @@ package akka.stream.impl
 
 import scala.annotation.tailrec
 import scala.collection.immutable
-
 import org.reactivestreams.api.{ Consumer, Processor, Producer }
 import org.reactivestreams.spi.Subscriber
-
 import akka.actor.ActorRefFactory
 import akka.stream.{ MaterializerSettings, FlowMaterializer }
+import scala.concurrent.Future
+import scala.util.Success
+import scala.util.Failure
 
 /**
  * INTERNAL API
@@ -53,6 +54,17 @@ private[akka] object Ast {
   case class ThunkProducerNode[I](f: () ⇒ I) extends ProducerNode[I] {
     def createProducer(settings: MaterializerSettings, context: ActorRefFactory): Producer[I] =
       new ActorProducer(context.actorOf(ActorProducer.props(settings, f)))
+  }
+  case class FutureProducerNode[I](future: Future[I]) extends ProducerNode[I] {
+    def createProducer(settings: MaterializerSettings, context: ActorRefFactory): Producer[I] =
+      future.value match {
+        case Some(Success(element)) ⇒
+          new ActorProducer[I](context.actorOf(IterableProducer.props(List(element), settings)))
+        case Some(Failure(t)) ⇒
+          new ErrorProducer(t).asInstanceOf[Producer[I]]
+        case None ⇒
+          new ActorProducer[I](context.actorOf(FutureProducer.props(future, settings)))
+      }
   }
 }
 

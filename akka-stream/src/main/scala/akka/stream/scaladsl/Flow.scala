@@ -8,12 +8,11 @@ import scala.collection.immutable
 import scala.concurrent.Future
 import scala.util.Try
 import scala.util.control.NoStackTrace
-
 import org.reactivestreams.api.Producer
-
 import akka.stream.FlowMaterializer
 import akka.stream.impl.Ast.{ ExistingProducer, IterableProducerNode, IteratorProducerNode, ThunkProducerNode }
 import akka.stream.impl.FlowImpl
+import akka.stream.impl.Ast.FutureProducerNode
 
 object Flow {
   /**
@@ -48,6 +47,14 @@ object Flow {
    * when any other exception is thrown.
    */
   def apply[T](f: () ⇒ T): Flow[T] = FlowImpl(ThunkProducerNode(f), Nil)
+
+  /**
+   * Start a new flow from the given `Future`. The stream will consist of
+   * one element when the `Future` is completed with a successful value, which
+   * may happen before or after materializing the `Flow`.
+   * The stream ends exceptionally if the `Future` is completed with a failure.
+   */
+  def apply[T](future: Future[T]): Flow[T] = FlowImpl(FutureProducerNode(future), Nil)
 
 }
 
@@ -189,7 +196,7 @@ trait Flow[+T] {
    * the current element if the given predicate returns true for it. This means
    * that for the following series of predicate values, three substreams will
    * be produced with lengths 1, 2, and 3:
-   * 
+   *
    * {{{
    * false,             // element goes into first substream
    * true, false,       // elements go into second substream

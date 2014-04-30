@@ -41,14 +41,16 @@ object StreamTcp extends ExtensionId[StreamTcpExt] with ExtensionIdProvider {
     }
   }
 
-  object Connect {
-    /**
-     * Java API: factory method to create an Connect instance with default parameters
-     */
-    def create(settings: MaterializerSettings, remoteAddress: InetSocketAddress): Connect =
-      apply(settings, remoteAddress)
-  }
-
+  /**
+   * The Connect message is sent to the StreamTcp manager actor, which is obtained via
+   * `IO(StreamTcp)`. The manager replies with a [[StreamTcp.OutgoingTcpConnection]]
+   * message.
+   *
+   * @param remoteAddress is the address to connect to
+   * @param localAddress optionally specifies a specific address to bind to
+   * @param options Please refer to [[akka.io.TcpSO]] for a list of all supported options.
+   * @param timeout is the desired connection timeout, `null` means "no timeout"
+   */
   case class Connect(settings: MaterializerSettings,
                      remoteAddress: InetSocketAddress,
                      localAddress: Option[InetSocketAddress] = None,
@@ -74,14 +76,21 @@ object StreamTcp extends ExtensionId[StreamTcpExt] with ExtensionIdProvider {
       copy(timeout = Option(timeout))
   }
 
-  object Bind {
-    /**
-     * Java API: factory method to create a Bind instance with default parameters
-     */
-    def create(settings: MaterializerSettings, localAddress: InetSocketAddress): Bind =
-      apply(settings, localAddress)
-  }
-
+  /**
+   * The Bind message is send to the StreamTcp manager actor, which is obtained via
+   * `IO(StreamTcp)`, in order to bind to a listening socket. The manager
+   * replies with a [[StreamTcp.TcpServerBinding]]. If the local port is set to 0 in
+   * the Bind message, then the [[StreamTcp.TcpServerBinding]] message should be inspected to find
+   * the actual port which was bound to.
+   *
+   * @param localAddress The socket address to bind to; use port zero for
+   *                automatic assignment (i.e. an ephemeral port)
+   *
+   * @param backlog This specifies the number of unaccepted connections the O/S
+   *                kernel will hold for this port before refusing connections.
+   *
+   * @param options Please refer to [[akka.io.TcpSO]] for a list of all supported options.
+   */
   case class Bind(settings: MaterializerSettings,
                   localAddress: InetSocketAddress,
                   backlog: Int = 100,
@@ -100,6 +109,64 @@ object StreamTcp extends ExtensionId[StreamTcpExt] with ExtensionIdProvider {
 
   }
 
+}
+
+/**
+ * Java API: Factory methods for the messages of `StreamTcp`.
+ */
+object StreamTcpMessage {
+  /**
+   * Java API: The Connect message is sent to the StreamTcp manager actor, which is obtained via
+   * `StreamTcp.get(system).manager()`. The manager replies with a [[StreamTcp.OutgoingTcpConnection]]
+   * message.
+   *
+   * @param remoteAddress is the address to connect to
+   * @param localAddress optionally specifies a specific address to bind to
+   * @param options Please refer to [[akka.io.TcpSO]] for a list of all supported options.
+   * @param timeout is the desired connection timeout, `null` means "no timeout"
+   */
+  def connect(
+    settings: MaterializerSettings,
+    remoteAddress: InetSocketAddress,
+    localAddress: InetSocketAddress,
+    options: java.lang.Iterable[SocketOption],
+    timeout: FiniteDuration): StreamTcp.Connect =
+    StreamTcp.Connect(settings, remoteAddress, Option(localAddress), Util.immutableSeq(options), Option(timeout))
+
+  /**
+   * Java API: Message to Connect to the given `remoteAddress` without binding to a local address and without
+   * specifying options.
+   */
+  def connect(settings: MaterializerSettings, remoteAddress: InetSocketAddress): StreamTcp.Connect =
+    StreamTcp.Connect(settings, remoteAddress)
+
+  /**
+   * Java API: The Bind message is send to the StreamTcp manager actor, which is obtained via
+   * `StreamTcp.get(system).manager()`, in order to bind to a listening socket. The manager
+   * replies with a [[StreamTcp.TcpServerBinding]]. If the local port is set to 0 in
+   * the Bind message, then the [[StreamTcp.TcpServerBinding]] message should be inspected to find
+   * the actual port which was bound to.
+   *
+   * @param localAddress The socket address to bind to; use port zero for
+   *                automatic assignment (i.e. an ephemeral port)
+   *
+   * @param backlog This specifies the number of unaccepted connections the O/S
+   *                kernel will hold for this port before refusing connections.
+   *
+   * @param options Please refer to [[akka.io.TcpSO]] for a list of all supported options.
+   */
+  def bind(settings: MaterializerSettings,
+           localAddress: InetSocketAddress,
+           backlog: Int,
+           options: java.lang.Iterable[SocketOption]): StreamTcp.Bind =
+    StreamTcp.Bind(settings, localAddress, backlog, Util.immutableSeq(options))
+
+  /**
+   * Java API: Message to open a listening socket without specifying options.
+   */
+  def bind(settings: MaterializerSettings,
+           localAddress: InetSocketAddress): StreamTcp.Bind =
+    StreamTcp.Bind(settings, localAddress)
 }
 
 /**

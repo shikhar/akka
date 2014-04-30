@@ -324,13 +324,11 @@ public class FlowTest {
     final java.lang.Iterable<String> input = Arrays.asList("A", "B", "C");
     Flow.create(input).onComplete(materializer, new OnCompleteCallback() {
       @Override
-      public void onSuccess() {
-        probe.getRef().tell("done", ActorRef.noSender());
-      }
-
-      @Override
-      public void onError(Throwable e) {
-        probe.getRef().tell(e, ActorRef.noSender());
+      public void onComplete(Throwable e) {
+        if (e == null)
+          probe.getRef().tell("done", ActorRef.noSender());
+        else
+          probe.getRef().tell(e, ActorRef.noSender());
       }
     });
 
@@ -347,13 +345,11 @@ public class FlowTest {
       }
     }).onComplete(materializer, new OnCompleteCallback() {
       @Override
-      public void onSuccess() {
-        probe.getRef().tell("done", ActorRef.noSender());
-      }
-
-      @Override
-      public void onError(Throwable e) {
-        probe.getRef().tell(e.getMessage(), ActorRef.noSender());
+      public void onComplete(Throwable e) {
+        if (e == null)
+          probe.getRef().tell("done", ActorRef.noSender());
+        else
+          probe.getRef().tell(e, ActorRef.noSender());
       }
     });
 

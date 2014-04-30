@@ -297,8 +297,12 @@ trait RecoveryTransformer[T, U] {
  * @see [[Flow#onComplete]]
  */
 trait OnCompleteCallback {
-  def onSuccess(): Unit
-  def onError(e: Throwable): Unit
+  /**
+   * The parameter `e` will be `null` when the stream terminated
+   * normally, otherwise it will be the exception that caused
+   * the abnormal termination.
+   */
+  def onComplete(e: Throwable)
 }
 
 /**
@@ -377,8 +381,8 @@ private[akka] class FlowAdapter[T](delegate: SFlow[T]) extends Flow[T] {
 
   override def onComplete(materializer: FlowMaterializer)(callback: OnCompleteCallback): Unit =
     delegate.onComplete(materializer) {
-      case Success(_) ⇒ callback.onSuccess()
-      case Failure(e) ⇒ callback.onError(e)
+      case Success(_) ⇒ callback.onComplete(null)
+      case Failure(e) ⇒ callback.onComplete(e)
     }
 
   override def toProducer(materializer: FlowMaterializer): Producer[T] =

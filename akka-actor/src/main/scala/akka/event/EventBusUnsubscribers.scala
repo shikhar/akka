@@ -58,9 +58,9 @@ private[akka] object EventStreamUnsubscriber {
 
   private val unsubscribersCount = new AtomicInteger(0)
 
-  final case class Register(actor: ActorRef)
+  final case class Register(actor: ActorRef) extends NoSerializationVerificationNeeded
 
-  final case class UnregisterIfNoMoreSubscribedChannels(actor: ActorRef)
+  final case class UnregisterIfNoMoreSubscribedChannels(actor: ActorRef) extends NoSerializationVerificationNeeded
 
   private def props(eventStream: EventStream, debug: Boolean) =
     Props(classOf[EventStreamUnsubscriber], eventStream, debug)
@@ -127,8 +127,8 @@ private[akka] object ActorClassificationUnsubscriber {
 
   private val unsubscribersCount = new AtomicInteger(0)
 
-  final case class Register(actor: ActorRef, seq: Int)
-  final case class Unregister(actor: ActorRef, seq: Int)
+  final case class Register(actor: ActorRef, seq: Int) extends NoSerializationVerificationNeeded
+  final case class Unregister(actor: ActorRef, seq: Int) extends NoSerializationVerificationNeeded
 
   def start(system: ActorSystem, bus: ActorClassification, debug: Boolean = false) = {
     val debug = system.settings.config.getBoolean("akka.actor.debug.event-stream")
